@@ -19,8 +19,11 @@ function parseDotDate(s: string) {
 
 async function processEnergyCharts(url: string, energyType: string): Promise<SyncResult> {
   const res: SyncResult = { processed: 0, inserted: 0, updated: 0, skipped: 0 };
+  const operationStartTime = Date.now();
   try {
+    console.log(`[${energyType}] Fetching data from ${url}`);
     const r = await axios.get(url, { timeout: 20000 });
+    console.log(`[${energyType}] Data fetched successfully, parsing...`);
     if (!r.data || !Array.isArray(r.data)) return res;
 
     const root = r.data;
@@ -73,8 +76,9 @@ async function processEnergyCharts(url: string, energyType: string): Promise<Syn
         res.inserted++; // simplest: count all as inserted (consumer expects totals)
       }
     }
+    console.log(`[${energyType}] Processing completed in ${Date.now() - operationStartTime}ms`);
   } catch (err) {
-    console.error('Failed to fetch/process', url, err);
+    console.error(`[${energyType}] Failed to fetch/process ${url} after ${Date.now() - operationStartTime}ms:`, err);
   }
   return res;
 }
@@ -83,23 +87,28 @@ export async function syncFromApi(electricityUrl?: string, gasUrl?: string): Pro
   const start = Date.now();
   let inserted = 0, updated = 0, skipped = 0, processed = 0;
 
-  if (electricityUrl) {
-    const r = await processEnergyCharts(electricityUrl, 'ELECTRICITY');
-    inserted += r.inserted;
-    updated += r.updated;
-    skipped += r.skipped;
-    processed += r.processed;
-  }
+  try {
+    if (electricityUrl) {
+      const r = await processEnergyCharts(electricityUrl, 'ELECTRICITY');
+      inserted += r.inserted;
+      updated += r.updated;
+      skipped += r.skipped;
+      processed += r.processed;
+    }
 
-  if (gasUrl) {
-    const r = await processEnergyCharts(gasUrl, 'GAS');
-    inserted += r.inserted;
-    updated += r.updated;
-    skipped += r.skipped;
-    processed += r.processed;
+    if (gasUrl) {
+      const r = await processEnergyCharts(gasUrl, 'GAS');
+      inserted += r.inserted;
+      updated += r.updated;
+      skipped += r.skipped;
+      processed += r.processed;
+    }
+  } catch (err) {
+    console.error('syncFromApi encountered error:', err);
   }
 
   const duration = Date.now() - start;
+  console.log(`syncFromApi completed in ${duration}ms: processed=${processed}, inserted=${inserted}, updated=${updated}, skipped=${skipped}`);
   return { processed, inserted, updated, skipped, executionTimeMs: duration };
 }
 
